@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comment Moderator</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f4f4f9; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        /* Header Area */
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 5px; }
+        
+        /* Buttons */
+        button { padding: 12px 20px; cursor: pointer; color: white; border: none; border-radius: 5px; font-weight: bold; }
+        .btn-analyze { background: #007bff; }
+        .btn-analyze:hover { background: #0056b3; }
+        
+        /* The New Delete All Button */
+        .btn-danger-all { background: #8b0000; display: none; } /* Hidden until we have results */
+        .btn-danger-all:hover { background: #a80000; }
+
+        /* Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border-bottom: 1px solid #eee; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; color: #333; }
+        
+        /* Sentiment Colors */
+        .Positive { color: #28a745; font-weight: bold; }
+        .Negative { color: #dc3545; font-weight: bold; background-color: #fff5f5; }
+        .Neutral { color: #6c757d; }
+        
+        /* Single Delete Button */
+        .del-btn { background: #ff4d4d; font-size: 12px; padding: 6px 12px; border-radius: 4px; }
+        .del-btn:hover { background: #cc0000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTuber Comment Moderator</h1>
+        
+        <div class="controls">
+            <input type="text" id="urlInput" placeholder="Paste YouTube Video Link here...">
+            <button class="btn-analyze" onclick="analyze()">Fetch Comments</button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="status">Ready to analyze.</h3>
+            <button id="deleteAllBtn" class="btn-danger-all" onclick="deleteAllNegative()">🗑 Delete All Negative</button>
+        </div>
+        
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Comment</th>
+                    <th style="width: 20%;">Sentiment</th>
+                    <th style="width: 20%;">Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        // 1. Fetch and Display Comments
+        async function analyze() {
+            const url = document.getElementById('urlInput').value;
+            const tbody = document.querySelector('#resultsTable tbody');
+            const status = document.getElementById('status');
+            const deleteBtn = document.getElementById('deleteAllBtn');
+            
+            // Clear previous results
+            tbody.innerHTML = '';
+            status.innerText = "Analyzing comments...";
+            deleteBtn.style.display = "none";
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    status.innerText = "Error: " + data.error;
+                    return;
+                }
+
+                status.innerText = `Found ${data.comments.length} comments.`;
+                deleteBtn.style.display = "block"; // Show the Delete All button
+
+                data.comments.forEach((item, index) => {
+                    // We add the class 'row-negative' to the TR tag if sentiment is Negative
+                    // This makes finding them very easy later.
+                    const rowClass = item.sentiment === "Negative" ? "row-negative" : "";
+                    
+                    const row = `
+                        <tr id="row-${index}" class="${rowClass}">
+                            <td>${item.text}</td>
+                            <td class="${item.sentiment}">${item.sentiment} (${item.score})</td>
+                            <td><button class="del-btn" onclick="removeRow('row-${index}')">Delete</button></td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+
+            } catch (err) {
+                status.innerText = "Server Error: Make sure app.py is running.";
+            }
+        }
+
+        // 2. Remove a Single Row
+        function removeRow(rowId) {
+            document.getElementById(rowId).remove();
+        }
+
+        // 3. Remove ALL Negative Rows
+        function deleteAllNegative() {
+            const negativeRows = document.querySelectorAll('.row-negative');
+            
+            if (negativeRows.length === 0) {
+                alert("No negative comments found!");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to remove ${negativeRows.length} negative comments?`)) {
+                negativeRows.forEach(row => row.remove());
+                
+                // Update the status text
+                const remaining = document.querySelectorAll('#resultsTable tbody tr').length;
+                document.getElementById('status').innerText = `Cleaned! ${remaining} comments remaining.`;
+            }
+        }
+    </script>
+</body>
+</html>
